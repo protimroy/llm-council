@@ -1,0 +1,112 @@
+.stage-critique {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #6f42c1;
+}
+
+.critique-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.critique-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.critique-section {
+  margin-bottom: 12px;
+}
+
+.critique-section:last-child {
+  margin-bottom: 0;
+}
+
+.critique-section h5 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  margin: 0 0 6px 0;
+}
+
+.critique-item {
+  padding: 6px 10px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #555;
+  line-height: 1.4;
+}
+
+.critique-item .confidence {
+  font-size: 11px;
+  color: #888;
+  margin-left: 4px;
+}
+
+.critique-item.severity-high {
+  border-left: 3px solid #dc3545;
+}
+
+.critique-item.severity-medium {
+  border-left: 3px solid #ffc107;
+}
+
+.critique-item.severity-low {
+  border-left: 3px solid #28a745;
+}
+
+.critique-item .severity-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.severity-badge.high { background: #f8d7da; color: #721c24; }
+.severity-badge.medium { background: #fff3cd; color: #856404; }
+.severity-badge.low { background: #d4edda; color: #155724; }
+
+.critique-item .impact-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+
+.impact-badge.high { background: #f8d7da; color: #721c24; }
+.impact-badge.medium { background: #fff3cd; color: #856404; }
+.impact-badge.low { background: #d4edda; color: #155724; }
+
+.minority-alert {
+  border-left: 3px solid #6f42c1;
+}
+
+.minority-alert .why-outlier {
+  font-style: italic;
+  color: #6f42c1;
+}
+
+.minority-alert .why-matter {
+  color: #555;
+}
+
+.critique-empty {
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+}

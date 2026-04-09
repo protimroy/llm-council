@@ -1,21 +1,50 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.pyo
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
-.venv
+.venv/
 
-# Keys and secrets
+# Secrets
 .env
+.env.*
+!.env.example
 
-# Data files
-data/
+# Local runtime data
+data/config.json
+data/conversations/
 
 # Frontend
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.eslintcache
+frontend/coverage/
+
+# Logs
+logs/
+*.log
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+COMMIT_MESSAGE.md

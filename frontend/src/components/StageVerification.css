@@ -1,0 +1,104 @@
+.stage-verification {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #17a2b8;
+}
+
+.verification-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.verification-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.verification-summary {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.verification-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.verification-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.result-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.result-status.passed { background: #d4edda; color: #155724; }
+.result-status.failed { background: #f8d7da; color: #721c24; }
+.result-status.timeout { background: #fff3cd; color: #856404; }
+.result-status.skipped { background: #e2e3e5; color: #383d41; }
+.result-status.not_testable { background: #e2e3e5; color: #383d41; }
+.result-status.error { background: #f8d7da; color: #721c24; }
+
+.result-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.result-claim {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.result-summary {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.4;
+}
+
+.result-meta {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.verification-stats {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e9ecef;
+}
+
+.verification-stat {
+  font-size: 12px;
+  color: #666;
+}
+
+.verification-stat .count {
+  font-weight: 600;
+  color: #333;
+}

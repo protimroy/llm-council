@@ -9,10 +9,14 @@ function App() {
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [currentConfig, setCurrentConfig] = useState(null);
+  const [configLoading, setConfigLoading] = useState(false);
 
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
+    loadConfig();
   }, []);
 
   // Load conversation details when selected
@@ -37,6 +41,28 @@ function App() {
       setCurrentConversation(conv);
     } catch (error) {
       console.error('Failed to load conversation:', error);
+    }
+  };
+
+  const loadConfig = async () => {
+    try {
+      const data = await api.listModels();
+      setAvailableModels(data.available_models || []);
+      setCurrentConfig(data.current_config || null);
+    } catch (error) {
+      console.error('Failed to load config:', error);
+    }
+  };
+
+  const handleSaveConfig = async (councilModels, chairmanModel) => {
+    setConfigLoading(true);
+    try {
+      const config = await api.updateConfig(councilModels, chairmanModel);
+      setCurrentConfig(config);
+    } catch (error) {
+      console.error('Failed to save config:', error);
+    } finally {
+      setConfigLoading(false);
     }
   };
 
@@ -76,10 +102,18 @@ function App() {
         stage2: null,
         stage3: null,
         metadata: null,
+        judgeDecision: null,
+        verificationReport: null,
+        finalDecision: null,
+        critiqueReport: null,
+        secondRound: null,
         loading: {
           stage1: false,
           stage2: false,
           stage3: false,
+          fastJudge: false,
+          verification: false,
+          secondRound: false,
         },
       };
 
@@ -127,6 +161,79 @@ function App() {
               lastMsg.stage2 = event.data;
               lastMsg.metadata = event.metadata;
               lastMsg.loading.stage2 = false;
+              // Also store critique_report from metadata if available
+              if (event.metadata?.critique_report) {
+                lastMsg.critiqueReport = event.metadata.critique_report;
+              }
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'fast_judge_start':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.loading.fastJudge = true;
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'fast_judge_complete':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.judgeDecision = event.data;
+              lastMsg.loading.fastJudge = false;
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'verification_start':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.loading.verification = true;
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'verification_complete':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.verificationReport = event.data;
+              lastMsg.loading.verification = false;
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'post_judge_complete':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.finalDecision = event.data;
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'second_round_start':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.loading.secondRound = true;
+              lastMsg.secondRound = event.data;
+              return { ...prev, messages };
+            });
+            break;
+
+          case 'second_round_complete':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.loading.secondRound = false;
+              if (event.data?.final_decision) {
+                lastMsg.finalDecision = event.data.final_decision;
+              }
               return { ...prev, messages };
             });
             break;
@@ -188,6 +295,10 @@ function App() {
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        availableModels={availableModels}
+        currentConfig={currentConfig}
+        onSaveConfig={handleSaveConfig}
+        configLoading={configLoading}
       />
       <ChatInterface
         conversation={currentConversation}

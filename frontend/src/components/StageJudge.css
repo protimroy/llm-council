@@ -1,0 +1,108 @@
+.stage-judge {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #6c757d;
+}
+
+.stage-judge.decision-synthesize_now,
+.stage-judge.decision-synthesize {
+  border-left-color: #28a745;
+  background: #f0fff4;
+}
+
+.stage-judge.decision-escalate_for_verification {
+  border-left-color: #ffc107;
+  background: #fffdf0;
+}
+
+.stage-judge.decision-request_second_round,
+.stage-judge.decision-second_round {
+  border-left-color: #dc3545;
+  background: #fff5f5;
+}
+
+.stage-judge.decision-unresolved {
+  border-left-color: #6c757d;
+  background: #f8f9fa;
+}
+
+.judge-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.judge-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+}
+
+.judge-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.judge-badge.synthesize {
+  background: #d4edda;
+  color: #155724;
+}
+
+.judge-badge.verification {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.judge-badge.second-round {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.judge-badge.unresolved {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+.judge-rationale {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.judge-confidence {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 12px;
+}
+
+.judge-stats {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.judge-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #666;
+}
+
+.judge-stat .count {
+  font-weight: 600;
+  color: #333;
+}
+
+.judge-stat.resolved .count { color: #28a745; }
+.judge-stat.rejected .count { color: #dc3545; }
+.judge-stat.unresolved .count { color: #ffc107; }

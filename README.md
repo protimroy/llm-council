@@ -2,37 +2,54 @@
 
 ![llmcouncil](header.jpg)
 
-The idea of this repo is that instead of asking a question to your favorite LLM provider (e.g. OpenAI GPT 5.1, Google Gemini 3.0 Pro, Anthropic Claude Sonnet 4.5, xAI Grok 4, eg.c), you can group them into your "LLM Council". This repo is a simple, local web app that essentially looks like ChatGPT except it uses OpenRouter to send your query to multiple LLMs, it then asks them to review and rank each other's work, and finally a Chairman LLM produces the final response.
+LLM Council is a local multi-model research app. Instead of asking one model for one answer, it sends your query to a council of models through OpenRouter, extracts structured claims, critiques those claims across models, triages disagreements, optionally verifies testable claims with sandboxed Python checks, and then synthesizes a final answer with a chairman model.
 
-In a bit more detail, here is what happens when you submit a query:
+The current system keeps the original ranking-based pipeline as a fallback, but the primary path is now a structured, self-testing council flow.
 
-1. **Stage 1: First opinions**. The user query is given to all LLMs individually, and the responses are collected. The individual responses are shown in a "tab view", so that the user can inspect them all one by one.
-2. **Stage 2: Review**. Each individual LLM is given the responses of the other LLMs. Under the hood, the LLM identities are anonymized so that the LLM can't play favorites when judging their outputs. The LLM is asked to rank them in accuracy and insight.
-3. **Stage 3: Final response**. The designated Chairman of the LLM Council takes all of the model's responses and compiles them into a single final answer that is presented to the user.
+## Pipeline
 
-## Vibe Code Alert
+1. **Stage 1: Specialist responses**
+    Each model answers the question and emits an evidence packet with claims and optional proposals.
+2. **Stage 2: Claim critique**
+    Models review anonymized specialist claims and identify agreements, disagreements, load-bearing points, and minority alerts.
+3. **Fast Judge triage**
+    A rule-based judge decides whether the council should synthesize immediately, verify claims, or request a second round.
+4. **Verification**
+    Testable claims run through AST-validated Python checks with bounded parallelism and isolated execution.
+5. **Stage 3: Final synthesis**
+    The chairman model produces the final answer using the specialist responses, critique, and any verification results.
+6. **Optional second round**
+    If key disagreements remain unresolved, the system can generate focused follow-up prompts and re-run the council.
 
-This project was 99% vibe coded as a fun Saturday hack because I wanted to explore and evaluate a number of LLMs side by side in the process of [reading books together with LLMs](https://x.com/karpathy/status/1990577951671509438). It's nice and useful to see multiple responses side by side, and also the cross-opinions of all LLMs on each other's outputs. I'm not going to support it in any way, it's provided here as is for other people's inspiration and I don't intend to improve it. Code is ephemeral now and libraries are over, ask your LLM to change it in whatever way you like.
+## Features
+
+- Side-by-side specialist responses in the UI
+- Structured critique, judge, and verification panels
+- Runtime council/chairman selection in the sidebar
+- Streaming updates over SSE during execution
+- Optional LangGraph-backed execution path
+- Optional MCP server for tool-based integration
+- Local conversation storage in `data/conversations/`
 
 ## Setup
 
-### 1. Install Dependencies
+### 1. Install dependencies
 
 The project uses [uv](https://docs.astral.sh/uv/) for project management.
 
-**Backend:**
+**Backend**
 ```bash
 uv sync
 ```
 
-**Frontend:**
+**Frontend**
 ```bash
 cd frontend
 npm install
 cd ..
 ```
 
-### 2. Configure API Key
+### 2. Configure the API key
 
 Create a `.env` file in the project root:
 
@@ -42,20 +59,9 @@ OPENROUTER_API_KEY=sk-or-v1-...
 
 Get your API key at [openrouter.ai](https://openrouter.ai/). Make sure to purchase the credits you need, or sign up for automatic top up.
 
-### 3. Configure Models (Optional)
+### 3. Configure models (optional)
 
-Edit `backend/config.py` to customize the council:
-
-```python
-COUNCIL_MODELS = [
-    "openai/gpt-5.1",
-    "google/gemini-3-pro-preview",
-    "anthropic/claude-sonnet-4.5",
-    "x-ai/grok-4",
-]
-
-CHAIRMAN_MODEL = "google/gemini-3-pro-preview"
-```
+Council members and the chairman model are configurable at runtime from the frontend sidebar or via the backend config endpoints. The active config is stored locally in `data/config.json`.
 
 ## Running the Application
 
@@ -79,9 +85,43 @@ npm run dev
 
 Then open http://localhost:5173 in your browser.
 
+The backend listens on http://localhost:8001.
+
+## API Surface
+
+- `GET /api/models` returns available models and the current runtime config
+- `GET /api/config` returns the current council config
+- `POST /api/config` updates council members and chairman model
+- `POST /api/conversations/{conversation_id}/message` runs the default council pipeline
+- `POST /api/conversations/{conversation_id}/message/stream` streams stage updates over SSE
+- `POST /api/conversations/{conversation_id}/message/langgraph` runs the optional LangGraph path
+
+## Optional Integrations
+
+### LangGraph
+
+The project includes an optional LangGraph orchestration layer that mirrors the main structured pipeline without replacing the default execution path.
+
+### MCP Server
+
+Run the MCP server with:
+
+```bash
+uv run python -m backend.mcp_server
+```
+
+It exposes council execution and config management as MCP tools.
+
+## Notes
+
+- Conversations are stored locally in `data/conversations/`.
+- Runtime configuration is stored locally in `data/config.json`.
+- Structured metadata such as critique reports, judge decisions, and verification reports are returned by the API and shown in the UI, but only the main stage payloads are persisted to conversation JSON today.
+- If the structured pipeline errors, the app falls back to the original ranking-based path instead of failing the request.
+
 ## Tech Stack
 
-- **Backend:** FastAPI (Python 3.10+), async httpx, OpenRouter API
+- **Backend:** FastAPI, Pydantic, async httpx, LangGraph, MCP
 - **Frontend:** React + Vite, react-markdown for rendering
 - **Storage:** JSON files in `data/conversations/`
 - **Package Management:** uv for Python, npm for JavaScript
