@@ -1,0 +1,159 @@
+.knowledge-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 420px;
+}
+
+.knowledge-graph.empty {
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.graph-empty-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.graph-empty-body {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.graph-header-row,
+.graph-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.graph-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.graph-meta,
+.graph-mode,
+.graph-node-path {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.graph-mode,
+.graph-type {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.graph-stage {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #fbfcfe;
+  aspect-ratio: 19 / 9;
+  min-height: 300px;
+}
+
+.graph-stage svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.graph-edge {
+  stroke: #aebdca;
+  stroke-width: 1.5;
+}
+
+.edge-tag {
+  stroke: #b6d4c4;
+  stroke-dasharray: 4 4;
+}
+
+.edge-missing-link {
+  stroke: #d7b8a2;
+  stroke-dasharray: 5 5;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-node circle {
+  fill: #fff;
+  stroke: var(--accent-blue);
+  stroke-width: 2;
+}
+
+.node-tag circle {
+  fill: #eef8f2;
+  stroke: var(--accent-green);
+}
+
+.node-missing circle {
+  fill: #fff7ef;
+  stroke: #c97942;
+  stroke-dasharray: 3 3;
+}
+
+.graph-node.active-session circle {
+  stroke-width: 3;
+}
+
+.graph-node.selected circle {
+  fill: #eaf2fb;
+  stroke: #245d99;
+}
+
+.graph-node text {
+  fill: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.graph-detail-row {
+  justify-content: flex-start;
+  min-height: 30px;
+  flex-wrap: wrap;
+}
+
+.graph-type.type-document {
+  color: var(--accent-blue);
+}
+
+.graph-type.type-tag {
+  color: var(--accent-green);
+}
+
+.graph-type.type-missing {
+  color: #a15a2f;
+}
+
+.graph-node-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+@media (max-width: 860px) {
+  .knowledge-graph {
+    min-height: 360px;
+  }
+
+  .graph-stage {
+    aspect-ratio: 1 / 1;
+  }
+}

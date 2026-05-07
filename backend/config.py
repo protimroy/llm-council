@@ -64,7 +64,15 @@ CONFIG_FILE = os.getenv("CONFIG_FILE", "data/config.json")
 # Backend network settings
 BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
 BACKEND_PORT = _int_env("BACKEND_PORT", 8001)
-CORS_ORIGINS = _csv_env("CORS_ORIGINS", ["http://localhost:5173", "http://localhost:3000"])
+CORS_ORIGINS = _csv_env(
+    "CORS_ORIGINS",
+    [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+)
 
 # Default council configuration
 DEFAULT_COUNCIL_MODELS = [

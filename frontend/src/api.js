@@ -107,6 +107,76 @@ export const api = {
     return response.json();
   },
 
+  async listResearchSessions() {
+    const response = await fetch(`${API_BASE}/api/research-sessions`);
+    if (!response.ok) {
+      throw new Error('Failed to list research sessions');
+    }
+    return response.json();
+  },
+
+  async createResearchSession(title, seedContent, conversationId) {
+    const response = await fetch(`${API_BASE}/api/research-sessions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title,
+        seed_content: seedContent || null,
+        conversation_id: conversationId || null,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to create research session');
+    }
+    return response.json();
+  },
+
+  async getResearchSession(sessionId) {
+    const response = await fetch(`${API_BASE}/api/research-sessions/${sessionId}`);
+    if (!response.ok) {
+      throw new Error('Failed to load research session');
+    }
+    return response.json();
+  },
+
+  async updateResearchSessionFile(sessionId, filename, content) {
+    const response = await fetch(`${API_BASE}/api/research-sessions/${sessionId}/files`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ filename, content }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to save research session file');
+    }
+    return response.json();
+  },
+
+  async appendResearchSessionLog(sessionId, content, source) {
+    const response = await fetch(`${API_BASE}/api/research-sessions/${sessionId}/log`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ content, source: source || null }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to append research session log');
+    }
+    return response.json();
+  },
+
+  async getResearchGraph() {
+    const response = await fetch(`${API_BASE}/api/research-graph`);
+    if (!response.ok) {
+      throw new Error('Failed to load research graph');
+    }
+    return response.json();
+  },
+
   async setResearchContext(conversationId, filename, content) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/research-context`,
@@ -137,6 +207,23 @@ export const api = {
     );
     if (!response.ok) {
       throw new Error('Failed to load saved research log');
+    }
+    return response.json();
+  },
+
+  async setResearchContextFromSession(conversationId, sessionId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/research-context/from-session`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ session_id: sessionId }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to load research session context');
     }
     return response.json();
   },

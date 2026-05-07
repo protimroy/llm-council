@@ -14,6 +14,9 @@ function App() {
   const [modelCatalogMeta, setModelCatalogMeta] = useState(null);
   const [configLoading, setConfigLoading] = useState(false);
   const [researchLogs, setResearchLogs] = useState([]);
+  const [researchSessions, setResearchSessions] = useState([]);
+  const [currentResearchSession, setCurrentResearchSession] = useState(null);
+  const [researchGraph, setResearchGraph] = useState(null);
   const [researchStatus, setResearchStatus] = useState('');
 
   // Load conversations on mount
@@ -21,6 +24,8 @@ function App() {
     loadConversations();
     loadConfig();
     loadResearchLogs();
+    loadResearchSessions();
+    loadResearchGraph();
   }, []);
 
   // Load conversation details when selected
@@ -69,6 +74,24 @@ function App() {
       setResearchLogs(data.logs || []);
     } catch (error) {
       console.error('Failed to load research logs:', error);
+    }
+  };
+
+  const loadResearchSessions = async () => {
+    try {
+      const data = await api.listResearchSessions();
+      setResearchSessions(data.sessions || []);
+    } catch (error) {
+      console.error('Failed to load research sessions:', error);
+    }
+  };
+
+  const loadResearchGraph = async () => {
+    try {
+      const graph = await api.getResearchGraph();
+      setResearchGraph(graph);
+    } catch (error) {
+      console.error('Failed to load research graph:', error);
     }
   };
 
@@ -379,6 +402,7 @@ function App() {
     try {
       const saved = await api.saveResearchLog(currentConversationId);
       await loadResearchLogs();
+      await loadResearchGraph();
       setResearchStatus(`Saved ${saved.path}`);
     } catch (error) {
       console.error('Failed to save research log:', error);
@@ -423,6 +447,117 @@ function App() {
     }
   };
 
+  const handleCreateResearchSession = async () => {
+    const title = currentConversation?.title && currentConversation.title !== 'New Conversation'
+      ? currentConversation.title
+      : 'Research Session';
+    const seedContent = (currentConversation?.messages || [])
+      .filter((message) => message.role === 'user')
+      .slice(-3)
+      .map((message) => message.content)
+      .join('\n\n');
+    try {
+      const session = await api.createResearchSession(title, seedContent, currentConversationId);
+      setCurrentResearchSession(session);
+      await loadResearchSessions();
+      await loadResearchGraph();
+      setResearchStatus(`Created ${session.path}`);
+    } catch (error) {
+      console.error('Failed to create research session:', error);
+      setResearchStatus('Session create failed');
+    }
+  };
+
+  const handleSelectResearchSession = async (sessionId) => {
+    if (!sessionId) {
+      setCurrentResearchSession(null);
+      return;
+    }
+    try {
+      const session = await api.getResearchSession(sessionId);
+      setCurrentResearchSession(session);
+      setResearchStatus(`Opened ${session.title}`);
+    } catch (error) {
+      console.error('Failed to load research session:', error);
+      setResearchStatus('Session load failed');
+    }
+  };
+
+  const handleSaveResearchSessionFile = async (filename, content) => {
+    if (!currentResearchSession?.id) return;
+    try {
+      const session = await api.updateResearchSessionFile(currentResearchSession.id, filename, content);
+      setCurrentResearchSession(session);
+      await loadResearchSessions();
+      await loadResearchGraph();
+      setResearchStatus(`Saved ${filename}`);
+    } catch (error) {
+      console.error('Failed to save research session file:', error);
+      setResearchStatus('Session save failed');
+    }
+  };
+
+  const handleAppendResearchSessionLog = async (content) => {
+    if (!currentResearchSession?.id || !content.trim()) return;
+    try {
+      const session = await api.appendResearchSessionLog(
+        currentResearchSession.id,
+        content,
+        currentConversation?.title || 'LLM Council'
+      );
+      setCurrentResearchSession(session);
+      await loadResearchSessions();
+      await loadResearchGraph();
+      setResearchStatus('Appended research log');
+    } catch (error) {
+      console.error('Failed to append research session log:', error);
+      setResearchStatus('Log append failed');
+    }
+  };
+
+  const handleLoadResearchSessionContext = async (sessionId) => {
+    if (!currentConversationId || !sessionId) return;
+    try {
+      await api.setResearchContextFromSession(currentConversationId, sessionId);
+      await loadConversation(currentConversationId);
+      setResearchStatus('Loaded session context');
+    } catch (error) {
+      console.error('Failed to load research session context:', error);
+      setResearchStatus('Session context load failed');
+    }
+  };
+
+  const handleSendResearchPrompt = async (mode) => {
+    if (!currentResearchSession) {
+      setResearchStatus('Open a research session first');
+      return;
+    }
+    const plan = currentResearchSession.plan?.content || '';
+    const log = currentResearchSession.research_log?.content || '';
+    const prompts = {
+      critique: 'Ask the council to critique this research plan. Identify weak assumptions, missing experiments, technical risks, and decision points that need verification.',
+      revise: 'As chairman, revise this into a sharper plan.md. Preserve the core idea, resolve ambiguity, and make next actions concrete.',
+      tests: 'Extract a verification plan. List executable checks, simulations, benchmarks, small experiments, and any claims that cannot be tested with code.',
+    };
+    const task = prompts[mode] || prompts.critique;
+    const content = [
+      `Research session: ${currentResearchSession.title}`,
+      '',
+      task,
+      '',
+      'Current plan.md:',
+      '```markdown',
+      plan,
+      '```',
+      '',
+      'Current research_log.md:',
+      '```markdown',
+      log,
+      '```',
+    ].join('\n');
+    await handleSendMessage(content);
+  };
+
   return (
     <div className="app">
       <Sidebar
@@ -442,12 +577,21 @@ function App() {
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
         researchLogs={researchLogs}
+        researchSessions={researchSessions}
+        currentResearchSession={currentResearchSession}
+        researchGraph={researchGraph}
         researchStatus={researchStatus}
         onExportConversation={handleExportConversation}
         onSaveResearchLog={handleSaveResearchLog}
         onLoadResearchFile={handleLoadResearchFile}
         onLoadSavedResearchLog={handleLoadSavedResearchLog}
         onClearResearchContext={handleClearResearchContext}
+        onCreateResearchSession={handleCreateResearchSession}
+        onSelectResearchSession={handleSelectResearchSession}
+        onSaveResearchSessionFile={handleSaveResearchSessionFile}
+        onAppendResearchSessionLog={handleAppendResearchSessionLog}
+        onLoadResearchSessionContext={handleLoadResearchSessionContext}
+        onSendResearchPrompt={handleSendResearchPrompt}
       />
     </div>
   );

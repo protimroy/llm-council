@@ -15,12 +15,21 @@ export default function ChatInterface({
   onSendMessage,
   isLoading,
   researchLogs,
+  researchSessions,
+  currentResearchSession,
+  researchGraph,
   researchStatus,
   onExportConversation,
   onSaveResearchLog,
   onLoadResearchFile,
   onLoadSavedResearchLog,
   onClearResearchContext,
+  onCreateResearchSession,
+  onSelectResearchSession,
+  onSaveResearchSessionFile,
+  onAppendResearchSessionLog,
+  onLoadResearchSessionContext,
+  onSendResearchPrompt,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -65,12 +74,21 @@ export default function ChatInterface({
       <ResearchWorkspace
         conversation={conversation}
         researchLogs={researchLogs}
+        researchSessions={researchSessions}
+        currentResearchSession={currentResearchSession}
+        researchGraph={researchGraph}
         researchStatus={researchStatus}
         onExportConversation={onExportConversation}
         onSaveResearchLog={onSaveResearchLog}
         onLoadResearchFile={onLoadResearchFile}
         onLoadSavedResearchLog={onLoadSavedResearchLog}
         onClearResearchContext={onClearResearchContext}
+        onCreateResearchSession={onCreateResearchSession}
+        onSelectResearchSession={onSelectResearchSession}
+        onSaveResearchSessionFile={onSaveResearchSessionFile}
+        onAppendResearchSessionLog={onAppendResearchSessionLog}
+        onLoadResearchSessionContext={onLoadResearchSessionContext}
+        onSendResearchPrompt={onSendResearchPrompt}
       />
       <div className="messages-container">
         {conversation.messages.length === 0 ? (

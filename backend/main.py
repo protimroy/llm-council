@@ -64,6 +64,30 @@ class ResearchLogLoadRequest(BaseModel):
     filename: str
 
 
+class ResearchSessionCreateRequest(BaseModel):
+    """Request to create a repo-local research session."""
+    title: str = "Research Session"
+    seed_content: Optional[str] = None
+    conversation_id: Optional[str] = None
+
+
+class ResearchSessionFileRequest(BaseModel):
+    """Request to create or replace a research session Markdown file."""
+    filename: str
+    content: str
+
+
+class ResearchSessionLogAppendRequest(BaseModel):
+    """Request to append a research log entry."""
+    content: str
+    source: Optional[str] = None
+
+
+class ResearchSessionLoadRequest(BaseModel):
+    """Request to attach a research session to a conversation."""
+    session_id: str
+
+
 class ConversationMetadata(BaseModel):
     """Conversation metadata for list view."""
     id: str
@@ -78,6 +102,7 @@ class Conversation(BaseModel):
     created_at: str
     title: str
     research_context: Optional[Dict[str, Any]] = None
+    research_session: Optional[Dict[str, Any]] = None
     messages: List[Dict[str, Any]]
 
 
@@ -177,6 +202,55 @@ async def list_research_logs():
     return {"logs": storage.list_research_logs()}
 
 
+@app.get("/api/research-sessions")
+async def list_research_sessions():
+    """List repo-local research sessions."""
+    return {"sessions": storage.list_research_sessions()}
+
+
+@app.post("/api/research-sessions")
+async def create_research_session(request: ResearchSessionCreateRequest):
+    """Create a repo-local research session with plan.md and research_log.md."""
+    return storage.create_research_session(
+        request.title,
+        seed_content=request.seed_content,
+        conversation_id=request.conversation_id,
+    )
+
+
+@app.get("/api/research-sessions/{session_id}")
+async def get_research_session(session_id: str):
+    """Read a repo-local research session."""
+    try:
+        return storage.get_research_session(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/research-sessions/{session_id}/files")
+async def update_research_session_file(session_id: str, request: ResearchSessionFileRequest):
+    """Create or replace a Markdown file inside a research session."""
+    try:
+        return storage.update_research_session_file(session_id, request.filename, request.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/research-sessions/{session_id}/log")
+async def append_research_session_log(session_id: str, request: ResearchSessionLogAppendRequest):
+    """Append a dated entry to a session research_log.md."""
+    try:
+        return storage.append_research_session_log(session_id, request.content, request.source)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/research-graph")
+async def get_research_graph():
+    """Build the current research knowledge graph from Markdown links and tags."""
+    return storage.build_research_graph()
+
+
 @app.post("/api/conversations/{conversation_id}/research-context")
 async def set_research_context(conversation_id: str, request: ResearchContextRequest):
     """Attach uploaded research context to a conversation."""
@@ -192,6 +266,15 @@ async def set_research_context_from_log(conversation_id: str, request: ResearchL
     try:
         log = storage.read_research_log(request.filename)
         return storage.set_research_context(conversation_id, log["filename"], log["content"])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/conversations/{conversation_id}/research-context/from-session")
+async def set_research_context_from_session(conversation_id: str, request: ResearchSessionLoadRequest):
+    """Attach a research session's Markdown files as conversation context."""
+    try:
+        return storage.set_research_context_from_session(conversation_id, request.session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

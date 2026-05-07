@@ -30,7 +30,9 @@ The current system keeps the original ranking-based pipeline as a fallback, but 
 - Streaming updates over SSE during execution
 - Targeted research briefings for second-round follow-up, with Brave Search support and DuckDuckGo fallback
 - Conversation export as Markdown/JSON plus repo-local research logs in `research_logs/`
-- Upload or load a saved `plan.md` / research log as persistent context for the next council run
+- Research Session Mode with editable `plan.md`, appendable `research_log.md`, and council refinement actions
+- Obsidian-style knowledge graph over saved research Markdown links and tags
+- Upload or load a saved `plan.md`, research log, or research session as persistent context for the next council run
 - Optional LangGraph-backed execution path
 - Optional MCP server for tool-based integration
 - Local conversation storage in `data/conversations/`, including structured critique/judge/verification metadata
@@ -95,7 +97,7 @@ OPENROUTER_INCLUDE_REASONING=true
 
 Whether a model returns reasoning text or structured reasoning details depends on the provider/model route.
 
-### 4. Research logs and continuation context
+### 4. Research sessions, logs, and continuation context
 
 The app can export the complete conversation as Markdown or JSON. It can also save a Markdown research log into `research_logs/`, a repo-local folder intended for normal Git review and commits.
 
@@ -104,6 +106,10 @@ RESEARCH_LOG_DIR=research_logs
 ```
 
 From the chat workspace, you can upload a `plan.md`, research log, or JSON/TXT file. The loaded file becomes persistent context for the next council run in that conversation, so the council can continue from a prior plan without pasting the whole file into every prompt.
+
+Research Session Mode creates folders under `research_logs/<session-slug>/` with an editable `plan.md`, an appendable `research_log.md`, and metadata in `session.json`. The workspace can load the whole session as conversation context, ask the council to critique it, ask the chairman to revise the plan, or extract verification tests.
+
+The knowledge graph is built from explicit Markdown structure first: `[[wiki links]]`, relative Markdown links, and `#tags` across `research_logs/**/*.md`. This gives an Obsidian-like graph that is deterministic, cheap, Git-friendly, and easy to inspect. Embeddings and a vector database are useful later for semantic search, duplicate-note discovery, and suggested links, but they are not required for the first graph view.
 
 The app deliberately does not run `git commit` for you. Saved logs appear as files in the repo so you can inspect the generated artifact, edit it, and commit it with your normal Git workflow.
 
@@ -186,8 +192,15 @@ python -m http.server 5173 --bind 127.0.0.1
 - `GET /api/conversations/{conversation_id}/export?format=markdown|json` exports the complete conversation
 - `POST /api/conversations/{conversation_id}/research-log` saves a Markdown research log into `research_logs/`
 - `GET /api/research-logs` lists saved repo-local research logs
+- `GET /api/research-sessions` lists repo-local research sessions
+- `POST /api/research-sessions` creates a session folder with `plan.md` and `research_log.md`
+- `GET /api/research-sessions/{session_id}` reads a research session and its Markdown files
+- `POST /api/research-sessions/{session_id}/files` creates or replaces a session Markdown file
+- `POST /api/research-sessions/{session_id}/log` appends a dated entry to `research_log.md`
+- `GET /api/research-graph` builds a graph from research Markdown links and tags
 - `POST /api/conversations/{conversation_id}/research-context` loads uploaded research context
 - `POST /api/conversations/{conversation_id}/research-context/from-log` loads a saved research log as context
+- `POST /api/conversations/{conversation_id}/research-context/from-session` loads a research session as context
 - `DELETE /api/conversations/{conversation_id}/research-context` clears loaded context
 - `POST /api/conversations/{conversation_id}/message` runs the default council pipeline
 - `POST /api/conversations/{conversation_id}/message/stream` streams stage updates over SSE
