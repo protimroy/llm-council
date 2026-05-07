@@ -11,12 +11,16 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [availableModels, setAvailableModels] = useState([]);
   const [currentConfig, setCurrentConfig] = useState(null);
+  const [modelCatalogMeta, setModelCatalogMeta] = useState(null);
   const [configLoading, setConfigLoading] = useState(false);
+  const [researchLogs, setResearchLogs] = useState([]);
+  const [researchStatus, setResearchStatus] = useState('');
 
   // Load conversations on mount
   useEffect(() => {
     loadConversations();
     loadConfig();
+    loadResearchLogs();
   }, []);
 
   // Load conversation details when selected
@@ -49,8 +53,39 @@ function App() {
       const data = await api.listModels();
       setAvailableModels(data.available_models || []);
       setCurrentConfig(data.current_config || null);
+      setModelCatalogMeta({
+        source: data.model_source,
+        error: data.model_catalog_error,
+        fetchedAt: data.model_catalog_fetched_at,
+      });
     } catch (error) {
       console.error('Failed to load config:', error);
+    }
+  };
+
+  const loadResearchLogs = async () => {
+    try {
+      const data = await api.listResearchLogs();
+      setResearchLogs(data.logs || []);
+    } catch (error) {
+      console.error('Failed to load research logs:', error);
+    }
+  };
+
+  const handleRefreshModels = async () => {
+    setConfigLoading(true);
+    try {
+      const data = await api.refreshModels();
+      setAvailableModels(data.available_models || []);
+      setModelCatalogMeta({
+        source: data.source,
+        error: data.error,
+        fetchedAt: data.fetched_at,
+      });
+    } catch (error) {
+      console.error('Failed to refresh model catalog:', error);
+    } finally {
+      setConfigLoading(false);
     }
   };
 
@@ -70,7 +105,7 @@ function App() {
     try {
       const newConv = await api.createConversation();
       setConversations([
-        { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
+        { id: newConv.id, created_at: newConv.created_at, title: newConv.title, message_count: 0 },
         ...conversations,
       ]);
       setCurrentConversationId(newConv.id);
@@ -102,6 +137,7 @@ function App() {
         stage2: null,
         stage3: null,
         metadata: null,
+        trace: null,
         judgeDecision: null,
         verificationReport: null,
         finalDecision: null,
@@ -126,6 +162,15 @@ function App() {
       // Send message with streaming
       await api.sendMessageStream(currentConversationId, content, (eventType, event) => {
         switch (eventType) {
+          case 'trace_context':
+            setCurrentConversation((prev) => {
+              const messages = [...prev.messages];
+              const lastMsg = messages[messages.length - 1];
+              lastMsg.trace = event.data;
+              return { ...prev, messages };
+            });
+            break;
+
           case 'stage1_start':
             setCurrentConversation((prev) => {
               const messages = [...prev.messages];
@@ -161,6 +206,9 @@ function App() {
               lastMsg.stage2 = event.data;
               lastMsg.metadata = event.metadata;
               lastMsg.loading.stage2 = false;
+              if (event.metadata?.trace) {
+                lastMsg.trace = event.metadata.trace;
+              }
               // Also store critique_report from metadata if available
               if (event.metadata?.critique_report) {
                 lastMsg.critiqueReport = event.metadata.critique_report;
@@ -231,6 +279,12 @@ function App() {
               const messages = [...prev.messages];
               const lastMsg = messages[messages.length - 1];
               lastMsg.loading.secondRound = false;
+              if (event.data?.research_briefing) {
+                lastMsg.secondRound = {
+                  ...(lastMsg.secondRound || {}),
+                  research_briefing: event.data.research_briefing,
+                };
+              }
               if (event.data?.final_decision) {
                 lastMsg.finalDecision = event.data.final_decision;
               }
@@ -264,6 +318,14 @@ function App() {
 
           case 'complete':
             // Stream complete, reload conversations list
+            if (event.data?.trace) {
+              setCurrentConversation((prev) => {
+                const messages = [...prev.messages];
+                const lastMsg = messages[messages.length - 1];
+                lastMsg.trace = event.data.trace;
+                return { ...prev, messages };
+              });
+            }
             loadConversations();
             setIsLoading(false);
             break;
@@ -288,6 +350,79 @@ function App() {
     }
   };
 
+  const downloadTextFile = (filename, content, contentType) => {
+    const blob = new Blob([content], { type: contentType || 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportConversation = async (format) => {
+    if (!currentConversationId) return;
+    try {
+      const exportPayload = await api.exportConversation(currentConversationId, format);
+      downloadTextFile(exportPayload.filename, exportPayload.content, exportPayload.content_type);
+      setResearchStatus(`Exported ${exportPayload.filename}`);
+    } catch (error) {
+      console.error('Failed to export conversation:', error);
+      setResearchStatus('Export failed');
+    }
+  };
+
+  const handleSaveResearchLog = async () => {
+    if (!currentConversationId) return;
+    try {
+      const saved = await api.saveResearchLog(currentConversationId);
+      await loadResearchLogs();
+      setResearchStatus(`Saved ${saved.path}`);
+    } catch (error) {
+      console.error('Failed to save research log:', error);
+      setResearchStatus('Save failed');
+    }
+  };
+
+  const handleLoadResearchFile = async (file) => {
+    if (!currentConversationId || !file) return;
+    try {
+      const content = await file.text();
+      await api.setResearchContext(currentConversationId, file.name, content);
+      await loadConversation(currentConversationId);
+      setResearchStatus(`Loaded ${file.name} as context`);
+    } catch (error) {
+      console.error('Failed to load research file:', error);
+      setResearchStatus('Load failed');
+    }
+  };
+
+  const handleLoadSavedResearchLog = async (filename) => {
+    if (!currentConversationId || !filename) return;
+    try {
+      await api.setResearchContextFromLog(currentConversationId, filename);
+      await loadConversation(currentConversationId);
+      setResearchStatus(`Loaded ${filename} as context`);
+    } catch (error) {
+      console.error('Failed to load saved research log:', error);
+      setResearchStatus('Load failed');
+    }
+  };
+
+  const handleClearResearchContext = async () => {
+    if (!currentConversationId) return;
+    try {
+      await api.clearResearchContext(currentConversationId);
+      await loadConversation(currentConversationId);
+      setResearchStatus('Cleared research context');
+    } catch (error) {
+      console.error('Failed to clear research context:', error);
+      setResearchStatus('Clear failed');
+    }
+  };
+
   return (
     <div className="app">
       <Sidebar
@@ -298,12 +433,21 @@ function App() {
         availableModels={availableModels}
         currentConfig={currentConfig}
         onSaveConfig={handleSaveConfig}
+        onRefreshModels={handleRefreshModels}
+        modelCatalogMeta={modelCatalogMeta}
         configLoading={configLoading}
       />
       <ChatInterface
         conversation={currentConversation}
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
+        researchLogs={researchLogs}
+        researchStatus={researchStatus}
+        onExportConversation={handleExportConversation}
+        onSaveResearchLog={handleSaveResearchLog}
+        onLoadResearchFile={handleLoadResearchFile}
+        onLoadSavedResearchLog={handleLoadSavedResearchLog}
+        onClearResearchContext={handleClearResearchContext}
       />
     </div>
   );

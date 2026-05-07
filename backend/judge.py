@@ -12,6 +12,7 @@ evidence strength to make a triage decision.
 import logging
 from typing import List, Optional
 
+from .observability import apply_context_to_current_span, get_tracer
 from .models import (
     CritiqueReport, FastJudgeDecision, TriageDecision, FinalDecision, FinalDecisionType,
     SeverityLevel, VerificationTarget, VerificationTargetType,
@@ -19,8 +20,10 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
+@tracer.chain(name="judge.fast_judge_triage")
 def fast_judge_triage(critique_report: Optional[CritiqueReport]) -> FastJudgeDecision:
     """Make a triage decision based on the structured critique report.
 
@@ -38,6 +41,13 @@ def fast_judge_triage(critique_report: Optional[CritiqueReport]) -> FastJudgeDec
     Returns:
         FastJudgeDecision with decision, rationale, and target lists.
     """
+    apply_context_to_current_span(
+        judge_component="fast_judge",
+        critique_available=critique_report is not None,
+        agreement_count=len(critique_report.agreements) if critique_report else 0,
+        disagreement_count=len(critique_report.disagreements) if critique_report else 0,
+    )
+
     if critique_report is None:
         logger.info("Fast Judge: no critique report, defaulting to synthesize_now")
         return FastJudgeDecision(
@@ -168,6 +178,7 @@ def fast_judge_triage(critique_report: Optional[CritiqueReport]) -> FastJudgeDec
     )
 
 
+@tracer.chain(name="judge.select_verification_targets")
 def select_verification_targets(
     judge_decision: FastJudgeDecision,
     critique_report: Optional[CritiqueReport],
@@ -191,6 +202,12 @@ def select_verification_targets(
     Returns:
         List of VerificationTarget objects (max 3).
     """
+    apply_context_to_current_span(
+        judge_component="verification_target_selection",
+        requested_verification_target_count=len(judge_decision.verification_targets or []),
+        stage1_result_count=len(stage1_results),
+    )
+
     if not judge_decision.verification_targets:
         return []
 
@@ -251,6 +268,7 @@ def select_verification_targets(
     return targets
 
 
+@tracer.chain(name="judge.post_verification_judge")
 def post_verification_judge(
     critique_report: Optional[CritiqueReport],
     judge_decision: FastJudgeDecision,
@@ -274,6 +292,13 @@ def post_verification_judge(
     Returns:
         FinalDecision with classification of claims and next actions.
     """
+    apply_context_to_current_span(
+        judge_component="post_verification_judge",
+        critique_available=critique_report is not None,
+        verification_available=verification_report is not None,
+        judge_decision=judge_decision.decision.value,
+    )
+
     from .models import FinalDecision, FinalDecisionType
 
     # If no critique report, default to synthesis
@@ -302,7 +327,33 @@ def post_verification_judge(
                 # not_testable, timeout, error, skipped
                 unresolved_claims.append(claim_id)
     else:
-        # No verification was run — all disagreements are unresolved
+        # No verification was run.
+        # If the Fast Judge already decided to request a second round, honour that
+        # decision directly rather than classifying everything as unresolved.
+        if judge_decision.decision == TriageDecision.request_second_round:
+            return FinalDecision(
+                decision=FinalDecisionType.second_round,
+                rationale=(
+                    "Fast Judge requested a second round due to high-severity disagreements. "
+                    "No verification was performed; proceeding with targeted follow-up."
+                ),
+                confidence=SeverityLevel.medium,
+                resolved_claims=[],
+                rejected_claims=[],
+                unresolved_claims=[
+                    claim_id
+                    for disagreement in critique_report.disagreements
+                    for claim_id in disagreement.claim_ids
+                ],
+                preserved_disagreements=judge_decision.selected_disagreements,
+                minority_alerts=judge_decision.minority_alerts_to_preserve,
+                verification_summary="No verification performed.",
+                next_actions=[
+                    "Generate targeted follow-up questions for unresolved disagreements.",
+                    "Re-run specialists with focused queries.",
+                ],
+            )
+        # Otherwise all disagreements are unresolved
         for d in critique_report.disagreements:
             unresolved_claims.extend(d.claim_ids)
 

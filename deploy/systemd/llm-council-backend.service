@@ -1,0 +1,19 @@
+[Unit]
+Description=LLM Council Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=llm-council
+Group=llm-council
+WorkingDirectory=/opt/llm-council
+EnvironmentFile=/opt/llm-council/.env
+ExecStart=/usr/local/bin/uv run python -m backend.main
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

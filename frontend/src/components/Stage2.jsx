@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import ReasoningTrace from './ReasoningTrace';
 import './Stage2.css';
 
 function deAnonymizeText(text, labelToModel) {
@@ -68,6 +69,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
             </ol>
           </div>
         )}
+        <ReasoningTrace item={rankings[activeTab]} />
       </div>
 
       {aggregateRankings && aggregateRankings.length > 0 && (

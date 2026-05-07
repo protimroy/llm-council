@@ -10,8 +10,10 @@ from typing import List, Dict, Any, Tuple, Optional
 
 from .openrouter import query_models_parallel, query_model
 from .config import get_council_models, get_chairman_model
+from .observability import apply_context_to_current_span, get_current_trace_payload, get_tracer
 from .prompts import STAGE1_SPECIALIST_PROMPT, STAGE2_CRITIQUE_PROMPT
 from .parsing import parse_evidence_packet, parse_critique_report
+from .research import build_research_briefing, format_research_briefing_for_prompt
 
 # Maximum number of second-round iterations to prevent infinite loops
 MAX_ROUNDS = 2
@@ -25,8 +27,10 @@ from .judge import fast_judge_triage, select_verification_targets, post_verifica
 from .verification import run_verification
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
 
 
+@tracer.chain(name="council.stage1_collect_responses")
 async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
@@ -44,6 +48,12 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
         'response' contains the human-readable prose (delimiter and JSON stripped).
         'evidence_packet' contains the parsed EvidencePacket dict (or fallback).
     """
+    apply_context_to_current_span(
+        council_stage="stage1",
+        council_model_count=len(get_council_models()),
+        user_query_characters=len(user_query),
+    )
+
     messages = [
         {"role": "system", "content": STAGE1_SPECIALIST_PROMPT},
         {"role": "user", "content": user_query}
@@ -70,7 +80,10 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
             stage1_results.append({
                 "model": model,
                 "response": answer_text,
-                "evidence_packet": packet.model_dump()
+                "evidence_packet": packet.model_dump(),
+                "reasoning": response.get('reasoning'),
+                "reasoning_details": response.get('reasoning_details'),
+                "usage": response.get('usage'),
             })
 
     return stage1_results
@@ -90,6 +103,12 @@ async def stage2_collect_rankings(
     Returns:
         Tuple of (rankings list, label_to_model mapping)
     """
+    apply_context_to_current_span(
+        council_stage="stage2_legacy_ranking",
+        council_input_response_count=len(stage1_results),
+        user_query_characters=len(user_query),
+    )
+
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]  # A, B, C, ...
 
@@ -151,12 +170,16 @@ Now provide your evaluation and ranking:"""
             stage2_results.append({
                 "model": model,
                 "ranking": full_text,
-                "parsed_ranking": parsed
+                "parsed_ranking": parsed,
+                "reasoning": response.get('reasoning'),
+                "reasoning_details": response.get('reasoning_details'),
+                "usage": response.get('usage'),
             })
 
     return stage2_results, label_to_model
 
 
+@tracer.chain(name="council.stage2_critique_claims")
 async def stage2_critique_claims(
     user_query: str,
     stage1_results: List[Dict[str, Any]]
@@ -179,6 +202,12 @@ async def stage2_critique_claims(
     Returns:
         Tuple of (stage2_results_list, label_to_model, merged_critique_report)
     """
+    apply_context_to_current_span(
+        council_stage="stage2_critique",
+        council_input_response_count=len(stage1_results),
+        user_query_characters=len(user_query),
+    )
+
     # Create anonymized labels for specialists (Specialist A, B, C, etc.)
     labels = [chr(65 + i) for i in range(len(stage1_results))]
 
@@ -250,7 +279,10 @@ async def stage2_critique_claims(
                 "model": model,
                 "ranking": critique_prose,  # Frontend renders this via ReactMarkdown
                 "parsed_ranking": [],  # Empty — old ranking format deprecated
-                "critique": critique_report.model_dump() if critique_report else None
+                "critique": critique_report.model_dump() if critique_report else None,
+                "reasoning": response.get('reasoning'),
+                "reasoning_details": response.get('reasoning_details'),
+                "usage": response.get('usage'),
             })
 
     # Merge individual critique reports into a single report
@@ -432,6 +464,7 @@ def aggregate_from_critique(
     return result
 
 
+@tracer.chain(name="council.stage3_synthesize_final")
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
@@ -461,6 +494,16 @@ async def stage3_synthesize_final(
     Returns:
         Dict with 'model' and 'response' keys
     """
+    apply_context_to_current_span(
+        council_stage="stage3",
+        stage1_response_count=len(stage1_results),
+        stage2_result_count=len(stage2_results),
+        chairman_model=get_chairman_model(),
+        critique_available=critique_report is not None,
+        verification_available=verification_report is not None,
+        final_decision_type=final_decision.decision.value if final_decision is not None else None,
+    )
+
     # Build Stage 1 context (always available)
     stage1_text = "\n\n".join([
         f"Model: {result['model']}\nResponse: {result['response']}"
@@ -514,7 +557,10 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     return {
         "model": chairman_model,
-        "response": response.get('content', '')
+        "response": response.get('content', ''),
+        "reasoning": response.get('reasoning'),
+        "reasoning_details": response.get('reasoning_details'),
+        "usage": response.get('usage'),
     }
 
 
@@ -707,6 +753,7 @@ def calculate_aggregate_rankings(
     return aggregate
 
 
+@tracer.chain(name="council.generate_conversation_title")
 async def generate_conversation_title(user_query: str) -> str:
     """
     Generate a short title for a conversation based on the first user message.
@@ -717,6 +764,12 @@ async def generate_conversation_title(user_query: str) -> str:
     Returns:
         A short title (3-5 words)
     """
+    apply_context_to_current_span(
+        council_stage="title_generation",
+        title_model="google/gemini-2.5-flash",
+        user_query_characters=len(user_query),
+    )
+
     title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
 The title should be concise and descriptive. Do not use quotes or punctuation in the title.
 
@@ -745,6 +798,7 @@ Title:"""
     return title
 
 
+@tracer.agent(name="council.run_full_council")
 async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete council process with structured pipeline.
@@ -766,6 +820,15 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
+    council_models = get_council_models()
+    apply_context_to_current_span(
+        council_engine="default",
+        council_model_count=len(council_models),
+        council_models=council_models,
+        chairman_model=get_chairman_model(),
+        user_query_characters=len(user_query),
+    )
+
     # Stage 1: Collect individual responses (with evidence packets)
     stage1_results = await stage1_collect_responses(user_query)
 
@@ -839,6 +902,7 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
             "judge_decision": judge_decision.model_dump(),
             "verification_report": verification_report.model_dump() if verification_report else None,
             "final_decision": final_decision.model_dump(),
+            "trace": get_current_trace_payload(),
         }
 
         return stage1_results, stage2_results, stage3_result, metadata
@@ -852,6 +916,7 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
         return await _run_original_pipeline(user_query, stage1_results)
 
 
+@tracer.chain(name="council.run_original_pipeline")
 async def _run_original_pipeline(
     user_query: str,
     stage1_results: List[Dict[str, Any]]
@@ -868,6 +933,13 @@ async def _run_original_pipeline(
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
+    apply_context_to_current_span(
+        council_engine="legacy_fallback",
+        council_fallback=True,
+        council_model_count=len(stage1_results),
+        user_query_characters=len(user_query),
+    )
+
     # Stage 2: Original whole-answer ranking
     stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results)
 
@@ -889,11 +961,13 @@ async def _run_original_pipeline(
         "judge_decision": None,
         "verification_report": None,
         "final_decision": None,
+        "trace": get_current_trace_payload(),
     }
 
     return stage1_results, stage2_results, stage3_result, metadata
 
 
+@tracer.agent(name="council.run_second_round")
 async def run_second_round(
     user_query: str,
     final_decision: FinalDecision,
@@ -928,6 +1002,15 @@ async def run_second_round(
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
+    apply_context_to_current_span(
+        council_engine="default",
+        council_second_round=True,
+        council_round_number=round_number,
+        unresolved_claim_count=len(final_decision.unresolved_claims),
+        rejected_claim_count=len(final_decision.rejected_claims),
+        prior_stage1_result_count=len(stage1_results),
+    )
+
     logger.info(
         f"Starting second round (round {round_number}/{MAX_ROUNDS}). "
         f"Unresolved claims: {final_decision.unresolved_claims}. "
@@ -936,8 +1019,18 @@ async def run_second_round(
 
     # ── Step 1: Build follow-up prompt ──────────────────────────────────
 
+    research_briefing = await build_research_briefing(
+        user_query,
+        final_decision,
+        critique_report=critique_report,
+    )
+
     follow_up_prompt = _build_follow_up_prompt(
-        user_query, final_decision, critique_report, verification_report
+        user_query,
+        final_decision,
+        critique_report,
+        verification_report,
+        research_briefing=research_briefing,
     )
 
     # ── Step 2: Re-query specialists with follow-up ─────────────────────
@@ -964,6 +1057,9 @@ async def run_second_round(
                 "model": model,
                 "response": answer_text,
                 "evidence_packet": packet.model_dump(),
+                "reasoning": response.get('reasoning'),
+                "reasoning_details": response.get('reasoning_details'),
+                "usage": response.get('usage'),
                 "is_follow_up": True  # Mark as second-round response
             })
 
@@ -1046,6 +1142,8 @@ async def run_second_round(
             "final_decision": new_final_decision.model_dump(),
             "second_round": True,
             "round_number": round_number,
+            "research_briefing": research_briefing,
+            "trace": get_current_trace_payload(),
         }
 
         return merged_results, stage2_results, stage3_result, metadata
@@ -1061,7 +1159,8 @@ def _build_follow_up_prompt(
     user_query: str,
     final_decision: FinalDecision,
     critique_report: Optional[CritiqueReport] = None,
-    verification_report: Optional[VerificationReport] = None
+    verification_report: Optional[VerificationReport] = None,
+    research_briefing: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Build a targeted follow-up prompt for the second round.
 
@@ -1073,6 +1172,7 @@ def _build_follow_up_prompt(
         final_decision: The FinalDecision from the first round
         critique_report: The previous CritiqueReport (may be None)
         verification_report: The previous VerificationReport (may be None)
+        research_briefing: Search result briefing for unresolved issues (may be None)
 
     Returns:
         A follow-up prompt string for specialists.
@@ -1110,6 +1210,11 @@ def _build_follow_up_prompt(
         parts.append("VERIFICATION RESULTS:")
         for r in verification_report.results:
             parts.append(f"  - Claim {r.source_claim_id}: {r.status.value} — {r.summary}")
+        parts.append("")
+
+    briefing_text = format_research_briefing_for_prompt(research_briefing)
+    if briefing_text:
+        parts.append(briefing_text)
         parts.append("")
 
     # Add next actions as guidance
@@ -1151,6 +1256,13 @@ async def _synthesize_with_uncertainty(
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
+    apply_context_to_current_span(
+        council_engine="default",
+        synthesized_with_uncertainty=True,
+        unresolved_claim_count=len(final_decision.unresolved_claims),
+        prior_stage1_result_count=len(stage1_results),
+    )
+
     logger.info("Synthesizing with uncertainty acknowledgment")
 
     # Use the original stage2 pipeline for a basic synthesis
@@ -1176,6 +1288,7 @@ async def _synthesize_with_uncertainty(
         "final_decision": final_decision.model_dump(),
         "second_round": True,
         "synthesized_with_uncertainty": True,
+        "trace": get_current_trace_payload(),
     }
 
     return stage1_results, stage2_results, stage3_result, metadata

@@ -12,4 +12,5 @@ dependencies = [
     "pydantic>=2.9.0",
     "langgraph>=1.1.6",
     "mcp>=1.27.0",
+    "arize-phoenix-otel>=0.15.0",
 ]

@@ -6,12 +6,21 @@ import Stage3 from './Stage3';
 import StageJudge from './StageJudge';
 import StageVerification from './StageVerification';
 import StageCritique from './StageCritique';
+import StageClaimLedger from './StageClaimLedger';
+import ResearchWorkspace from './ResearchWorkspace';
 import './ChatInterface.css';
 
 export default function ChatInterface({
   conversation,
   onSendMessage,
   isLoading,
+  researchLogs,
+  researchStatus,
+  onExportConversation,
+  onSaveResearchLog,
+  onLoadResearchFile,
+  onLoadSavedResearchLog,
+  onClearResearchContext,
 }) {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef(null);
@@ -53,6 +62,16 @@ export default function ChatInterface({
 
   return (
     <div className="chat-interface">
+      <ResearchWorkspace
+        conversation={conversation}
+        researchLogs={researchLogs}
+        researchStatus={researchStatus}
+        onExportConversation={onExportConversation}
+        onSaveResearchLog={onSaveResearchLog}
+        onLoadResearchFile={onLoadResearchFile}
+        onLoadSavedResearchLog={onLoadSavedResearchLog}
+        onClearResearchContext={onClearResearchContext}
+      />
       <div className="messages-container">
         {conversation.messages.length === 0 ? (
           <div className="empty-state">
@@ -75,6 +94,31 @@ export default function ChatInterface({
                 <div className="assistant-message">
                   <div className="message-label">LLM Council</div>
 
+                  {msg.trace?.trace_id && (
+                    <div className="trace-context-card">
+                      <div className="trace-context-header">
+                        <span className="trace-context-title">Trace</span>
+                        {msg.trace.project_name && (
+                          <span className="trace-context-project">{msg.trace.project_name}</span>
+                        )}
+                      </div>
+                      <div className="trace-context-body">
+                        <span className="trace-context-label">Trace ID</span>
+                        <span className="trace-context-id">{msg.trace.trace_id}</span>
+                      </div>
+                      {msg.trace.viewer_url && (
+                        <a
+                          className="trace-context-link"
+                          href={msg.trace.viewer_url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open Phoenix Trace
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   {/* Stage 1 */}
                   {msg.loading?.stage1 && (
                     <div className="stage-loading">
@@ -83,6 +127,15 @@ export default function ChatInterface({
                     </div>
                   )}
                   {msg.stage1 && <Stage1 responses={msg.stage1} />}
+
+                  {msg.stage1 && (
+                    <StageClaimLedger
+                      stage1={msg.stage1}
+                      critiqueReport={msg.critiqueReport}
+                      verificationReport={msg.verificationReport}
+                      finalDecision={msg.finalDecision}
+                    />
+                  )}
 
                   {/* Stage 2 */}
                   {msg.loading?.stage2 && (
@@ -147,6 +200,41 @@ export default function ChatInterface({
                       {msg.secondRound.rationale && (
                         <div className="judge-rationale">{msg.secondRound.rationale}</div>
                       )}
+                      {msg.secondRound.research_briefing && (
+                        <div className="research-briefing">
+                          <div className="research-briefing-title">
+                            Research briefing: {msg.secondRound.research_briefing.status}
+                          </div>
+                          {msg.secondRound.research_briefing.provider && (
+                            <div className="research-briefing-provider">
+                              Provider: {msg.secondRound.research_briefing.provider}
+                            </div>
+                          )}
+                          {msg.secondRound.research_briefing.summary && (
+                            <div className="research-briefing-summary">
+                              {msg.secondRound.research_briefing.summary}
+                            </div>
+                          )}
+                          {msg.secondRound.research_briefing.results?.length > 0 && (
+                            <ul className="research-results">
+                              {msg.secondRound.research_briefing.results.map((result, resultIndex) => (
+                                <li key={`${result.url || result.title}-${resultIndex}`}>
+                                  {result.url ? (
+                                    <a href={result.url} target="_blank" rel="noreferrer">
+                                      {result.title || result.url}
+                                    </a>
+                                  ) : (
+                                    <span>{result.title}</span>
+                                  )}
+                                  {result.content_excerpt && (
+                                    <div className="research-result-excerpt">{result.content_excerpt}</div>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -174,8 +262,7 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
       </div>
 
-      {conversation.messages.length === 0 && (
-        <form className="input-form" onSubmit={handleSubmit}>
+      <form className="input-form" onSubmit={handleSubmit}>
           <textarea
             className="message-input"
             placeholder="Ask your question... (Shift+Enter for new line, Enter to send)"
@@ -193,7 +280,6 @@ export default function ChatInterface({
             Send
           </button>
         </form>
-      )}
     </div>
   );
 }

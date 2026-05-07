@@ -35,8 +35,26 @@ from .models import (
     VerificationResult, VerificationReport, VerificationStatus,
     PostVerificationAction,
 )
+from .observability import apply_context_to_current_span, get_current_trace_payload, get_tracer, mark_span_error, mark_span_ok, set_span_attributes
 
 logger = logging.getLogger(__name__)
+tracer = get_tracer(__name__)
+
+
+def _return_traced_result(span, result: VerificationResult) -> VerificationResult:
+    """Attach a verification result to the current span and mark it successful."""
+    span.set_output({
+        "target_id": result.target_id,
+        "source_claim_id": result.source_claim_id,
+        "status": result.status.value,
+        "summary_characters": len(result.summary),
+        "raw_log_characters": len(result.raw_logs),
+        "execution_time_ms": result.execution_time_ms,
+        "derived_evidence_strength": result.derived_evidence_strength,
+        "notes_characters": len(result.notes or ""),
+    })
+    mark_span_ok(span)
+    return result
 
 # ─── Safety Constants ────────────────────────────────────────────────────────
 
@@ -452,88 +470,138 @@ async def run_single_verification(target: VerificationTarget) -> VerificationRes
     Returns:
         VerificationResult with status, summary, and logs.
     """
-    # Not testable — skip immediately
-    if target.target_type == VerificationTargetType.not_testable:
-        logger.info(f"Target {target.target_id}: not_testable, skipping")
-        return VerificationResult(
-            target_id=target.target_id,
-            source_claim_id=target.source_claim_id,
-            status=VerificationStatus.not_testable,
-            summary=f"Claim '{target.source_claim_id}' is not testable with available methods.",
-            notes="No test_logic provided or target_type is not_testable."
+    with tracer.start_as_current_span(
+        "verification.run_single_verification",
+        openinference_span_kind="tool",
+    ) as span:
+        span.set_input({
+            "target_id": target.target_id,
+            "source_claim_id": target.source_claim_id,
+            "source_model_name": target.source_model_name,
+            "target_type": target.target_type.value,
+            "hypothesis_characters": len(target.hypothesis),
+            "test_logic_characters": len(target.test_logic or ""),
+            "timeout_seconds": target.timeout_seconds,
+        })
+        span.set_tool(
+            name="sandboxed_python_verification",
+            description="Execute a sandboxed Python verification check for a council claim.",
+            parameters={
+                "target_id": target.target_id,
+                "source_claim_id": target.source_claim_id,
+                "timeout_seconds": target.timeout_seconds,
+            },
         )
-
-    # No test logic provided
-    if not target.test_logic or not target.test_logic.strip():
-        logger.info(f"Target {target.target_id}: no test_logic, marking not_testable")
-        return VerificationResult(
-            target_id=target.target_id,
-            source_claim_id=target.source_claim_id,
-            status=VerificationStatus.not_testable,
-            summary=f"Claim '{target.source_claim_id}' has no test logic.",
-            notes="test_logic field is empty."
+        set_span_attributes(
+            span,
+            verification_target_type=target.target_type.value,
+            verification_timeout_seconds=target.timeout_seconds,
+            verification_has_test_logic=bool(target.test_logic),
         )
+        apply_context_to_current_span()
 
-    # Validate code safety
-    is_safe, reason = _validate_code(target.test_logic)
-    if not is_safe:
-        logger.warning(f"Target {target.target_id}: unsafe code — {reason}")
-        return VerificationResult(
-            target_id=target.target_id,
-            source_claim_id=target.source_claim_id,
-            status=VerificationStatus.skipped,
-            summary=f"Verification skipped: {reason}",
-            notes=f"Safety validation failed for claim '{target.source_claim_id}'."
-        )
+        try:
+            # Not testable — skip immediately
+            if target.target_type == VerificationTargetType.not_testable:
+                logger.info(f"Target {target.target_id}: not_testable, skipping")
+                return _return_traced_result(
+                    span,
+                    VerificationResult(
+                        target_id=target.target_id,
+                        source_claim_id=target.source_claim_id,
+                        status=VerificationStatus.not_testable,
+                        summary=f"Claim '{target.source_claim_id}' is not testable with available methods.",
+                        notes="No test_logic provided or target_type is not_testable."
+                    ),
+                )
 
-    # Run the code
-    timeout = min(target.timeout_seconds, MAX_TIMEOUT_SECONDS)
-    start_time = time.time()
+            # No test logic provided
+            if not target.test_logic or not target.test_logic.strip():
+                logger.info(f"Target {target.target_id}: no test_logic, marking not_testable")
+                return _return_traced_result(
+                    span,
+                    VerificationResult(
+                        target_id=target.target_id,
+                        source_claim_id=target.source_claim_id,
+                        status=VerificationStatus.not_testable,
+                        summary=f"Claim '{target.source_claim_id}' has no test logic.",
+                        notes="test_logic field is empty."
+                    ),
+                )
 
-    # Run in executor to avoid blocking the event loop
-    loop = asyncio.get_event_loop()
-    stdout, stderr, returncode, timed_out, sandbox_strategy = await loop.run_in_executor(
-        None, _run_python_snippet, target.test_logic, timeout
-    )
+            # Validate code safety
+            is_safe, reason = _validate_code(target.test_logic)
+            if not is_safe:
+                logger.warning(f"Target {target.target_id}: unsafe code — {reason}")
+                return _return_traced_result(
+                    span,
+                    VerificationResult(
+                        target_id=target.target_id,
+                        source_claim_id=target.source_claim_id,
+                        status=VerificationStatus.skipped,
+                        summary=f"Verification skipped: {reason}",
+                        notes=f"Safety validation failed for claim '{target.source_claim_id}'."
+                    ),
+                )
 
-    execution_time_ms = int((time.time() - start_time) * 1000)
+            # Run the code
+            timeout = min(target.timeout_seconds, MAX_TIMEOUT_SECONDS)
+            start_time = time.time()
 
-    if timed_out:
-        logger.warning(f"Target {target.target_id}: timed out after {timeout}s")
-        return VerificationResult(
-            target_id=target.target_id,
-            source_claim_id=target.source_claim_id,
-            status=VerificationStatus.timeout,
-            summary=f"Verification timed out after {timeout} seconds.",
-            raw_logs=stderr,
-            execution_time_ms=execution_time_ms,
-            notes=f"Code execution exceeded {timeout}s limit in {sandbox_strategy}."
-        )
+            # Run in executor to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            stdout, stderr, returncode, timed_out, sandbox_strategy = await loop.run_in_executor(
+                None, _run_python_snippet, target.test_logic, timeout
+            )
 
-    # Determine status based on return code
-    if returncode == 0:
-        status = VerificationStatus.passed
-        summary = f"Claim '{target.source_claim_id}' passed verification."
-        logger.info(f"Target {target.target_id}: PASSED")
-    else:
-        status = VerificationStatus.failed
-        summary = f"Claim '{target.source_claim_id}' failed verification (exit code {returncode})."
-        logger.info(f"Target {target.target_id}: FAILED (exit code {returncode})")
+            execution_time_ms = int((time.time() - start_time) * 1000)
 
-    raw_logs = f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}" if stdout or stderr else ""
+            if timed_out:
+                logger.warning(f"Target {target.target_id}: timed out after {timeout}s")
+                return _return_traced_result(
+                    span,
+                    VerificationResult(
+                        target_id=target.target_id,
+                        source_claim_id=target.source_claim_id,
+                        status=VerificationStatus.timeout,
+                        summary=f"Verification timed out after {timeout} seconds.",
+                        raw_logs=stderr,
+                        execution_time_ms=execution_time_ms,
+                        notes=f"Code execution exceeded {timeout}s limit in {sandbox_strategy}."
+                    ),
+                )
 
-    return VerificationResult(
-        target_id=target.target_id,
-        source_claim_id=target.source_claim_id,
-        status=status,
-        summary=summary,
-        raw_logs=raw_logs,
-        execution_time_ms=execution_time_ms,
-        derived_evidence_strength="strong" if status == VerificationStatus.passed else "weak",
-        notes=f"Executed in {execution_time_ms}ms using {sandbox_strategy}."
-    )
+            # Determine status based on return code
+            if returncode == 0:
+                status = VerificationStatus.passed
+                summary = f"Claim '{target.source_claim_id}' passed verification."
+                logger.info(f"Target {target.target_id}: PASSED")
+            else:
+                status = VerificationStatus.failed
+                summary = f"Claim '{target.source_claim_id}' failed verification (exit code {returncode})."
+                logger.info(f"Target {target.target_id}: FAILED (exit code {returncode})")
+
+            raw_logs = f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}" if stdout or stderr else ""
+
+            return _return_traced_result(
+                span,
+                VerificationResult(
+                    target_id=target.target_id,
+                    source_claim_id=target.source_claim_id,
+                    status=status,
+                    summary=summary,
+                    raw_logs=raw_logs,
+                    execution_time_ms=execution_time_ms,
+                    derived_evidence_strength="strong" if status == VerificationStatus.passed else "weak",
+                    notes=f"Executed in {execution_time_ms}ms using {sandbox_strategy}."
+                ),
+            )
+        except Exception as exc:
+            mark_span_error(span, exc)
+            raise
 
 
+@tracer.chain(name="verification.run_verification")
 async def run_verification(
     targets: List[VerificationTarget],
     max_concurrent: int = MAX_CONCURRENT_VERIFICATIONS
@@ -550,6 +618,11 @@ async def run_verification(
     Returns:
         VerificationReport with results and summary.
     """
+    apply_context_to_current_span(
+        verification_target_count=len(targets),
+        verification_max_concurrent=max_concurrent,
+    )
+
     if not targets:
         return VerificationReport(
             decision_source="no_targets",

@@ -1,39 +1,41 @@
 .sidebar {
-  width: 260px;
-  background: #f8f8f8;
-  border-right: 1px solid #e0e0e0;
+  width: 340px;
+  min-width: 300px;
+  background: #f8fafc;
+  border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
 
 .sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 18px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .sidebar-header h1 {
-  font-size: 18px;
+  font-size: 20px;
   margin: 0 0 12px 0;
-  color: #333;
+  color: var(--text-primary);
+  font-weight: 800;
 }
 
 .new-conversation-btn {
   width: 100%;
   padding: 10px;
-  background: #4a90e2;
-  border: 1px solid #4a90e2;
-  border-radius: 6px;
+  background: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  border-radius: 8px;
   color: #fff;
   cursor: pointer;
   font-size: 14px;
   transition: background 0.2s;
-  font-weight: 500;
+  font-weight: 750;
 }
 
 .new-conversation-btn:hover {
-  background: #357abd;
-  border-color: #357abd;
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
 }
 
 .conversation-list {
@@ -45,109 +47,219 @@
 .no-conversations {
   padding: 16px;
   text-align: center;
-  color: #999;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
 .conversation-item {
   padding: 12px;
-  margin-bottom: 4px;
-  border-radius: 6px;
+  margin-bottom: 6px;
+  border-radius: 8px;
   cursor: pointer;
   transition: background 0.2s;
+  border: 1px solid transparent;
 }
 
 .conversation-item:hover {
-  background: #f0f0f0;
+  background: var(--surface-muted);
 }
 
 .conversation-item.active {
-  background: #e8f0fe;
-  border: 1px solid #4a90e2;
+  background: #eaf2fb;
+  border: 1px solid #bdd5ec;
 }
 
 .conversation-title {
-  color: #333;
+  color: var(--text-primary);
   font-size: 14px;
+  font-weight: 650;
   margin-bottom: 4px;
 }
 
 .conversation-meta {
-  color: #999;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .sidebar-settings {
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-subtle);
   padding: 12px;
-  background: #f4f6f8;
+  background: #eef3f7;
 }
 
 .settings-toggle {
   width: 100%;
   padding: 8px 10px;
-  background: white;
-  border: 1px solid #d8dee4;
-  border-radius: 6px;
-  color: #333;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 13px;
   text-align: left;
+  font-weight: 750;
 }
 
 .settings-panel {
   margin-top: 10px;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.settings-row-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 10px;
 }
 
 .settings-label {
   font-size: 12px;
-  color: #666;
-  font-weight: 600;
+  color: var(--text-secondary);
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .settings-help {
   font-size: 11px;
-  color: #888;
+  color: var(--text-muted);
+}
+
+.settings-warning {
+  padding: 8px;
+  background: #fff6e7;
+  border: 1px solid #efd6aa;
+  border-radius: 8px;
+  color: var(--accent-amber);
+  font-size: 11px;
+}
+
+.settings-icon-btn {
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 8px;
+}
+
+.settings-icon-btn:hover:not(:disabled) {
+  color: var(--accent-blue);
+  border-color: var(--accent-blue);
+}
+
+.model-filters {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.model-search,
+.provider-filter {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.selected-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.selected-model-chip {
+  max-width: 100%;
+  border: 1px solid #bdd5ec;
+  background: #eaf2fb;
+  color: var(--accent-blue);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .model-list {
-  max-height: 180px;
+  max-height: 300px;
   overflow-y: auto;
-  border: 1px solid #d8dee4;
-  background: white;
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-panel);
+  border-radius: 8px;
   padding: 6px;
 }
 
 .model-option {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 6px 4px;
+  padding: 8px 6px;
   font-size: 12px;
-  color: #333;
+  color: var(--text-primary);
+  border-radius: 7px;
+}
+
+.model-option:hover {
+  background: var(--surface-muted);
+}
+
+.model-option-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .model-option-name {
-  flex: 1;
+  display: block;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option-id {
+  display: block;
+  color: var(--text-faint);
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-option-provider {
-  color: #999;
+  color: var(--text-muted);
   font-size: 11px;
+}
+
+.reasoning-dot {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: #eef7f2;
+  color: var(--accent-green);
+  border: 1px solid #c7e6d4;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .chairman-select {
   width: 100%;
   padding: 8px;
-  border: 1px solid #d8dee4;
-  border-radius: 6px;
-  background: white;
-  color: #333;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
   font-size: 12px;
+  margin-top: 8px;
 }
 
 .settings-actions {
@@ -158,24 +270,25 @@
 .settings-btn {
   flex: 1;
   padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #d8dee4;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
   cursor: pointer;
   font-size: 12px;
+  font-weight: 750;
 }
 
 .settings-btn.primary {
-  background: #4a90e2;
-  border-color: #4a90e2;
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
   color: white;
 }
 
 .settings-btn.secondary {
-  background: white;
-  color: #333;
+  background: var(--surface-panel);
+  color: var(--text-secondary);
 }
 
 .settings-status {
   font-size: 11px;
-  color: #666;
+  color: var(--text-muted);
 }

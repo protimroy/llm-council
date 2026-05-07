@@ -2,7 +2,7 @@
  * API client for the LLM Council backend.
  */
 
-const API_BASE = 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8001';
 
 export const api = {
   /**
@@ -57,6 +57,16 @@ export const api = {
     return response.json();
   },
 
+  async refreshModels() {
+    const response = await fetch(`${API_BASE}/api/models/refresh`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to refresh models');
+    }
+    return response.json();
+  },
+
   /**
    * Get current council configuration.
    */
@@ -64,6 +74,80 @@ export const api = {
     const response = await fetch(`${API_BASE}/api/config`);
     if (!response.ok) {
       throw new Error('Failed to get config');
+    }
+    return response.json();
+  },
+
+  async exportConversation(conversationId, format = 'markdown') {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/export?format=${format}`
+    );
+    if (!response.ok) {
+      throw new Error('Failed to export conversation');
+    }
+    return response.json();
+  },
+
+  async saveResearchLog(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/research-log`,
+      { method: 'POST' }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to save research log');
+    }
+    return response.json();
+  },
+
+  async listResearchLogs() {
+    const response = await fetch(`${API_BASE}/api/research-logs`);
+    if (!response.ok) {
+      throw new Error('Failed to list research logs');
+    }
+    return response.json();
+  },
+
+  async setResearchContext(conversationId, filename, content) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/research-context`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filename, content }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to load research context');
+    }
+    return response.json();
+  },
+
+  async setResearchContextFromLog(conversationId, filename) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/research-context/from-log`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filename }),
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to load saved research log');
+    }
+    return response.json();
+  },
+
+  async clearResearchContext(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/research-context`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to clear research context');
     }
     return response.json();
   },
@@ -133,13 +217,16 @@ export const api = {
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      // Keep the last (possibly incomplete) line in the buffer
+      buffer = lines.pop();
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
@@ -151,6 +238,16 @@ export const api = {
             console.error('Failed to parse SSE event:', e);
           }
         }
+      }
+    }
+
+    // Process any remaining complete lines in the buffer
+    if (buffer.startsWith('data: ')) {
+      try {
+        const event = JSON.parse(buffer.slice(6));
+        onEvent(event.type, event);
+      } catch {
+        // Incomplete trailing chunk — ignore
       }
     }
   },

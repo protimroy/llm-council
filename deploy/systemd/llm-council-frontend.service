@@ -1,0 +1,19 @@
+[Unit]
+Description=LLM Council Static Frontend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=llm-council
+Group=llm-council
+WorkingDirectory=/opt/llm-council/frontend/dist
+EnvironmentFile=/opt/llm-council/.env
+ExecStart=/bin/bash -lc 'exec /opt/llm-council/.venv/bin/python -m http.server "${FRONTEND_PORT:-5173}" --bind "${FRONTEND_HOST:-0.0.0.0}"'
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

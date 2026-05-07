@@ -23,6 +23,7 @@ from .council import (
 )
 from .judge import fast_judge_triage, post_verification_judge, select_verification_targets
 from .models import CritiqueReport, FastJudgeDecision, FinalDecision, FinalDecisionType, TriageDecision, VerificationReport
+from .observability import apply_context_to_current_span, get_current_trace_payload
 from .verification import run_verification
 
 logger = logging.getLogger(__name__)
@@ -186,13 +187,21 @@ async def run_full_council_langgraph(user_query: str):
     Returns the same tuple shape as backend.council.run_full_council.
     Falls back to the original ranking pipeline if graph execution fails.
     """
+    apply_context_to_current_span(
+        council_engine="langgraph",
+        user_query_characters=len(user_query),
+    )
+
     try:
         state = await _COMPILED_COUNCIL_GRAPH.ainvoke({"user_query": user_query})
+        metadata = state.get("metadata", {"engine": "langgraph"})
+        if isinstance(metadata, dict):
+            metadata.setdefault("trace", get_current_trace_payload())
         return (
             state.get("stage1_results", []),
             state.get("stage2_results", []),
             state.get("stage3_result", {"model": "error", "response": "No synthesis produced."}),
-            state.get("metadata", {"engine": "langgraph"}),
+            metadata,
         )
     except Exception as exc:
         logger.warning("LangGraph pipeline failed, falling back to original pipeline: %s", exc, exc_info=True)

@@ -1,0 +1,129 @@
+.research-workspace {
+  margin: 0 0 18px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-soft);
+}
+
+.research-workspace-main,
+.workspace-secondary,
+.workspace-actions,
+.workspace-context,
+.workspace-load-saved {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.research-workspace-main {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.workspace-kicker {
+  color: var(--accent-blue);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workspace-title {
+  margin-top: 2px;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.workspace-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.workspace-actions button,
+.workspace-context button,
+.workspace-load-saved button {
+  border: 1px solid var(--border-strong);
+  background: #fff;
+  color: var(--text-secondary);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-actions button:hover,
+.workspace-context button:hover,
+.workspace-load-saved button:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.workspace-load-saved button:disabled {
+  cursor: not-allowed;
+  color: var(--text-faint);
+}
+
+.workspace-file-input {
+  display: none;
+}
+
+.workspace-secondary {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.workspace-context {
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.context-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  font-weight: 700;
+}
+
+.context-badge.active {
+  background: #eaf7ef;
+  border-color: #bfe6cb;
+  color: #24633a;
+}
+
+.workspace-load-saved select {
+  min-width: 220px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 7px 8px;
+  color: var(--text-secondary);
+  background: #fff;
+  font-size: 12px;
+}
+
+.workspace-status {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 860px) {
+  .research-workspace-main,
+  .workspace-secondary {
+    display: block;
+  }
+
+  .workspace-actions,
+  .workspace-load-saved {
+    justify-content: flex-start;
+    margin-top: 10px;
+  }
+}
