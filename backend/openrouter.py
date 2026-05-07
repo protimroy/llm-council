@@ -164,7 +164,8 @@ async def query_model(
         "messages": messages,
     }
 
-    if OPENROUTER_INCLUDE_REASONING and await _model_supports_parameter(model, "include_reasoning"):
+    requested_reasoning = OPENROUTER_INCLUDE_REASONING and await _model_supports_parameter(model, "include_reasoning")
+    if requested_reasoning:
         payload["include_reasoning"] = True
 
     with tracer.start_as_current_span(
@@ -195,6 +196,18 @@ async def query_model(
                     headers=headers,
                     json=payload
                 )
+                if response.status_code in {400, 404, 422} and payload.get("include_reasoning"):
+                    retry_payload = dict(payload)
+                    retry_payload.pop("include_reasoning", None)
+                    logger.warning(
+                        "OpenRouter rejected include_reasoning for %s; retrying without reasoning request.",
+                        model,
+                    )
+                    response = await client.post(
+                        OPENROUTER_API_URL,
+                        headers=headers,
+                        json=retry_payload,
+                    )
                 response.raise_for_status()
 
                 data = response.json()
@@ -232,6 +245,7 @@ async def query_model(
 
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
+            response_text = e.response.text[:1000].replace("\n", " ")
             if status_code == 401:
                 logger.error(
                     "OpenRouter rejected the configured API key while querying %s. "
@@ -244,10 +258,28 @@ async def query_model(
                     "Add credits or enable billing for the OpenRouter account/key.",
                     model,
                 )
+            elif status_code == 404:
+                logger.error(
+                    "OpenRouter could not find or route model %s. Pick another model from the refreshed catalog. "
+                    "Response: %s",
+                    model,
+                    response_text,
+                )
+            elif status_code == 400:
+                logger.error(
+                    "OpenRouter rejected the request for model %s. Response: %s",
+                    model,
+                    response_text,
+                )
             else:
-                logger.exception("OpenRouter HTTP error querying model %s", model)
+                logger.error(
+                    "OpenRouter HTTP %s querying model %s. Response: %s",
+                    status_code,
+                    model,
+                    response_text,
+                )
             mark_span_error(span, e)
-            span.set_output({"error": str(e), "status_code": status_code})
+            span.set_output({"error": str(e), "status_code": status_code, "response": response_text})
             return None
         except Exception as e:
             logger.exception("Error querying model %s", model)

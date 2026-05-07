@@ -19,6 +19,46 @@ from .models import EvidencePacket, Claim, ClaimType, EvidenceType, CritiqueRepo
 logger = logging.getLogger(__name__)
 
 
+def _extract_json_payload(value: str) -> str:
+    """Return the first JSON object from a model-produced payload.
+
+    Models often wrap required JSON in ```json fences or append a small note
+    after the object. This keeps parsing strict while trimming common wrappers.
+    """
+    text = value.strip()
+    fence_match = re.match(r"^```(?:json)?\s*(.*?)\s*```\s*$", text, re.IGNORECASE | re.DOTALL)
+    if fence_match:
+        text = fence_match.group(1).strip()
+
+    start = text.find("{")
+    if start == -1:
+        return text
+
+    depth = 0
+    in_string = False
+    escaped = False
+    for index, char in enumerate(text[start:], start=start):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and in_string:
+            escaped = True
+            continue
+        if char == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+
+    return text[start:]
+
+
 def parse_evidence_packet(raw_text: str, model_name: str) -> Tuple[str, EvidencePacket]:
     """Parse a Stage 1 specialist response into prose text and an EvidencePacket.
 
@@ -54,7 +94,7 @@ def parse_evidence_packet(raw_text: str, model_name: str) -> Tuple[str, Evidence
 
     parts = raw_text.split(delimiter, 1)
     answer_text = parts[0].strip()
-    json_str = parts[1].strip()
+    json_str = _extract_json_payload(parts[1])
 
     if not json_str:
         logger.warning(f"{model_name}: empty JSON block after delimiter")
@@ -140,7 +180,7 @@ def parse_critique_report(raw_text: str) -> Tuple[str, Optional[CritiqueReport],
 
     parts = raw_text.split(delimiter, 1)
     critique_prose = parts[0].strip()
-    json_str = parts[1].strip()
+    json_str = _extract_json_payload(parts[1])
 
     if not json_str:
         logger.warning("Empty JSON block after critique report delimiter")
